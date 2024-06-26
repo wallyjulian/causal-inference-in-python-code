@@ -1,0 +1,180 @@
+---
+title: 01 - Introduction To Causal Inference
+author: "L. Odette"
+jupyter: python3
+format: html
+page-layout: full
+editor: visual
+code-fold: true
+code-line-numbers: true
+code-block-border-left: "#31BAE9"
+theme: sandstone
+fontsize: 85%
+self-contained: true
+date: 06/26/2024
+---
+
+<!--# using e.g. quarto convert causal-inference-in-python/03-Graphical-Models.ipynb -->
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+# see: https://towardsdatascience.com/using-double-machine-learning-and-linear-programming-to-optimise-treatment-strategies-920c20a29553
+# and: https://github.com/raz1470/causal_ai/blob/main/notebooks/estimating%20average%20treatment%20effects%20with%20double%20machine%20learning.ipynb?source=post_page-----920c20a29553--------------------------------
+
+# https://medium.com/save-the-data/how-to-use-python-in-r-with-reticulate-and-conda-36685534f06a
+# start with conda create --prefix ./envs python=3.11.8 numpy seaborn pandas
+# and conda activate /Users/louisodette/Documents/R_projects/causal-inference-in-python-code/envs 
+require(magrittr, quietly = TRUE)
+require(ggplot2, quietly = TRUE)
+require(reticulate, quietly = TRUE)
+require(patchwork, quietly = TRUE)
+
+# source(here::here("./R","DML_homebrew.R"))
+# source(here::here("R","fmt_doubleml_fit.R"))
+
+use_python('../envs/bin/', required = NULL)
+use_condaenv('../envs/', required = NULL)
+Sys.setenv(RETICULATE_PYTHON="../envs/bin/python")
+```
+
+
+## What is Causal Inference
+
+## Why we Do Causal Inference
+
+## Machine Learning and Causal Inference
+
+## Association and Causation
+
+```{python}
+# ExecuteTime: {end_time: '2023-05-11T11:30:37.654067Z', start_time: '2023-05-11T11:30:35.955633Z'}
+# tags: [hide-input]
+import pandas as pd
+import numpy as np
+from scipy.special import expit
+import seaborn as sns
+from matplotlib import pyplot as plt
+from cycler import cycler
+
+
+
+default_cycler = (cycler(color=['0.3', '0.5', '0.7', '0.5']) +
+                  cycler(linestyle=['-', '--', ':', '-.']) + 
+                  cycler(marker=['o', 'v', 'd', 'p']))
+
+color=['0.3', '0.5', '0.7', '0.5']
+linestyle=['-', '--', ':', '-.']
+marker=['o', 'v', 'd', 'p']
+
+plt.rc('axes', prop_cycle=default_cycler)
+plt.rc('font', size=20)
+```
+
+```{python}
+# ExecuteTime: {end_time: '2023-05-11T11:30:37.669266Z', start_time: '2023-05-11T11:30:37.655602Z'}
+# tags: [hide-input]
+data = pd.read_csv("../causal-inference-in-python/data/xmas_sales.csv")
+data.head(6)
+```
+
+### The Treatment and the Outcome
+
+### The Fundamental Problem of Causal Inference
+
+```{python}
+# ExecuteTime: {end_time: '2023-05-11T11:30:37.754259Z', start_time: '2023-05-11T11:30:37.670698Z'}
+# tags: [hide-input]
+fig, ax = plt.subplots(1,1, figsize=(10,5))
+sns.boxplot(y="weekly_amount_sold", x="is_on_sale", data=data, ax=ax)
+
+ax.set_xlabel("is_on_sale", fontsize = 20)
+ax.set_ylabel("weekly_amount_sold", fontsize = 20)
+ax.tick_params(axis='both', which='major', labelsize=18)
+```
+
+### Causal Models
+
+### Interventions
+
+### Individual Treatment Effect
+
+### Potential Outcomes
+
+### Consistency and Stable Unit Treatment Values
+
+### Causal Quantities of Interest
+
+### Causal Quantities: An Example
+
+```{python}
+# ExecuteTime: {end_time: '2023-05-11T11:30:37.763490Z', start_time: '2023-05-11T11:30:37.755809Z'}
+# tags: [hide-input]
+pd.DataFrame(dict(
+    i= [1,2,3,4,5,6],
+    y0=[200,120,300, 450,600,600],
+    y1=[220,140,400, 500,600,800],
+    t= [0,0,0,1,1,1],
+    x= [0,0,1,0,0,1],
+)).assign(
+    y = lambda d: (d["t"]*d["y1"] + (1-d["t"])*d["y0"]).astype(int),
+    te=lambda d: d["y1"] - d["y0"]
+)
+```
+
+```{python}
+# ExecuteTime: {end_time: '2023-05-11T11:30:37.775180Z', start_time: '2023-05-11T11:30:37.766202Z'}
+# tags: [hide-input]
+pd.DataFrame(dict(
+    i= [1,2,3,4,5,6],
+    y0=[200,120,300, np.nan, np.nan, np.nan,],
+    y1=[np.nan, np.nan, np.nan, 500,600,800],
+    t= [0,0,0,1,1,1],
+    x= [0,0,1,0,0,1],
+)).assign(
+    y = lambda d: np.where(d["t"]==1, d["y1"], d["y0"]).astype(int),
+    te=lambda d: d["y1"] - d["y0"]
+)
+```
+
+## Bias
+
+### The Bias Equation
+
+### A Visual Guide to Bias
+
+```{python}
+# ExecuteTime: {end_time: '2023-05-11T11:30:37.915221Z', start_time: '2023-05-11T11:30:37.776499Z'}
+# tags: [hide-input, hide-output]
+plt.rc('font', size=20)
+fig = plt.figure()    
+
+sns.lmplot(data=data,
+           ci=None,
+           x="avg_week_sales",
+           y="weekly_amount_sold",
+           scatter=False,
+           height=4, aspect=2)
+
+plt.scatter(x=data.query("is_on_sale==1")["avg_week_sales"],
+            y=data.query("is_on_sale==1")["weekly_amount_sold"],
+            label="on sale",
+            color=color[0], alpha=.8, marker=marker[0])
+
+plt.scatter(x=data.query("is_on_sale==0")["avg_week_sales"],
+            y=data.query("is_on_sale==0")["weekly_amount_sold"],
+            label="not on sale",
+            color=color[2], alpha=.6, marker=marker[1])
+plt.legend(fontsize="14")
+    
+```
+
+## Identifying the Treatment Effect
+
+### The Independence Assumption
+
+### Identification with Randomization
+
+## Key Ideas

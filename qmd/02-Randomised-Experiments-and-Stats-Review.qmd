@@ -1,0 +1,403 @@
+---
+title: 02 - Randomized Experiments and Stats Review
+jupyter: python3
+---
+
+ 
+ 
+## Brute Force Independence with Randomization
+
+
+## An A/B Testing Example
+ 
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:29.347488Z', start_time: '2023-09-01T17:14:28.695287Z'}
+#| tags: [hide-input]
+import pandas as pd
+pd.set_option('display.max_rows', 5)
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:29.363096Z', start_time: '2023-09-01T17:14:29.349423Z'}
+import pandas as pd # for data manipulation
+import numpy as np # for numerical computation
+
+data = pd.read_csv("./data/cross_sell_email.csv")
+data
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:29.371157Z', start_time: '2023-09-01T17:14:29.364511Z'}
+(data
+ .groupby(["cross_sell_email"])
+ .mean())
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:29.383056Z', start_time: '2023-09-01T17:14:29.373475Z'}
+#| scrolled: true
+X = ["gender", "age"]
+
+mu = data.groupby("cross_sell_email")[X].mean()
+var = data.groupby("cross_sell_email")[X].var()
+
+norm_diff = ((mu - mu.loc["no_email"])/
+             np.sqrt((var + var.loc["no_email"])/2))
+
+norm_diff
+```
+
+## The Ideal Experiment
+ 
+
+ 
+## The Most Dangerous Equation
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:30.685676Z', start_time: '2023-09-01T17:14:29.384770Z'}
+#| tags: [hide-input]
+import warnings
+warnings.filterwarnings('ignore')
+
+import pandas as pd
+import numpy as np
+from scipy import stats
+import seaborn as sns
+from matplotlib import pyplot as plt
+from matplotlib import style
+from cycler import cycler
+import matplotlib
+
+default_cycler = (cycler(color=['0.1', '0.5', '1.0']))
+
+color=['0.3', '0.5', '0.7', '0.9']
+linestyle=['-', '--', ':', '-.']
+marker=['o', 'v', 'd', 'p']
+
+plt.rc('axes', prop_cycle=default_cycler)
+
+matplotlib.rcParams.update({'font.size': 18})
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:30.706628Z', start_time: '2023-09-01T17:14:30.687207Z'}
+df = pd.read_csv("data/enem_scores.csv")
+df.sort_values(by="avg_score", ascending=False).head(10)
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:30.813067Z', start_time: '2023-09-01T17:14:30.708131Z'}
+#| tags: [hide-input]
+plot_data = (df
+             .assign(top_school = df["avg_score"] >= np.quantile(df["avg_score"], .99))
+             [["top_school", "number_of_students"]]
+             .query(f"number_of_students<{np.quantile(df['number_of_students'], .98)}")) # remove outliers
+
+plt.figure(figsize=(8,4))
+ax = sns.boxplot(x="top_school", y="number_of_students", data=plot_data)
+
+plt.title("Number of Students of 1% Top Schools (Right)")
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:30.975794Z', start_time: '2023-09-01T17:14:30.814539Z'}
+#| tags: [hide-input]
+q_99 = np.quantile(df["avg_score"], .99)
+q_01 = np.quantile(df["avg_score"], .01)
+
+plot_data = (df
+             .sample(10000)
+             .assign(Group = lambda d: np.select([(d["avg_score"] > q_99) | (d["avg_score"] < q_01)],
+                                                 ["Top and Bottom"], "Middle")))
+plt.figure(figsize=(10,5))
+sns.scatterplot(y="avg_score", x="number_of_students", data=plot_data.query("Group=='Middle'"), label="Middle")
+ax = sns.scatterplot(y="avg_score", x="number_of_students", data=plot_data.query("Group!='Middle'"), color="0.7", label="Top and Bottom")
+
+plt.title("ENEM Score by Number of Students in the School")
+
+```
+
+##  The Standard Error of Our Estimates
+ 
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:30.987374Z', start_time: '2023-09-01T17:14:30.976905Z'}
+data = pd.read_csv("./data/cross_sell_email.csv")
+
+short_email = data.query("cross_sell_email=='short'")["conversion"]
+long_email = data.query("cross_sell_email=='long'")["conversion"]
+email = data.query("cross_sell_email!='no_email'")["conversion"]
+no_email = data.query("cross_sell_email=='no_email'")["conversion"]
+
+data.groupby("cross_sell_email").size()
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:30.993805Z', start_time: '2023-09-01T17:14:30.990856Z'}
+def se(y: pd.Series):
+    return y.std() / np.sqrt(len(y))
+
+print("SE for Long Email:", se(long_email))
+print("SE for Short Email:", se(short_email))
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:30.998176Z', start_time: '2023-09-01T17:14:30.995297Z'}
+print("SE for Long Email:", long_email.sem())
+print("SE for Short Email:", short_email.sem())
+```
+
+## Confidence Intervals
+ 
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:31.094364Z', start_time: '2023-09-01T17:14:30.999382Z'}
+n = 100
+conv_rate = 0.08
+
+def run_experiment(): 
+    return np.random.binomial(1, conv_rate, size=n)
+
+np.random.seed(42)
+
+experiments = [run_experiment().mean() for _ in range(10000)]
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:31.214686Z', start_time: '2023-09-01T17:14:31.095655Z'}
+#| tags: [hide-input]
+plt.figure(figsize=(10,4))
+freq, bins, img = plt.hist(experiments, bins=20, label="Experiment Means", color="0.6")
+plt.vlines(conv_rate, ymin=0, ymax=freq.max(), linestyles="dashed", label="True Mean", color="0.3")
+plt.legend()
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:31.287972Z', start_time: '2023-09-01T17:14:31.216097Z'}
+#| tags: [hide-input]
+np.random.seed(42)
+plt.figure(figsize=(10,4))
+plt.hist(np.random.binomial(1, 0.08, 100), bins=20)
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:31.381464Z', start_time: '2023-09-01T17:14:31.289700Z'}
+#| tags: [hide-input]
+x = np.linspace(-4, 4, 100)
+y = stats.norm.pdf(x, 0, 1)
+
+plt.figure(figsize=(10,4))
+plt.plot(x, y, linestyle="solid")
+plt.fill_between(x.clip(-3, +3), 0, y, alpha=0.5, label="~99.7% mass", color="C2")
+plt.fill_between(x.clip(-2, +2), 0, y, alpha=0.5, label="~95% mass", color="C1")
+plt.fill_between(x.clip(-1, +1), 0, y, alpha=0.5, label="~68% mass", color="C0")
+plt.ylabel("Density")
+plt.legend()
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:31.385987Z', start_time: '2023-09-01T17:14:31.382952Z'}
+exp_se = short_email.sem()
+exp_mu = short_email.mean()
+ci = (exp_mu - 2 * exp_se, exp_mu + 2 * exp_se)
+print("95% CI for Short Email: ", ci)
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:31.463518Z', start_time: '2023-09-01T17:14:31.387519Z'}
+#| tags: [hide-input]
+x = np.linspace(exp_mu - 4*exp_se, exp_mu + 4*exp_se, 100)
+y = stats.norm.pdf(x, exp_mu, exp_se)
+
+plt.figure(figsize=(10,4))
+plt.plot(x, y, lw=3)
+plt.vlines(ci[1], ymin=0, ymax=4, ls="dotted")
+plt.vlines(ci[0], ymin=0, ymax=4, ls="dotted", label="95% CI")
+plt.xlabel("Conversion")
+plt.legend()
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:31.468696Z', start_time: '2023-09-01T17:14:31.464968Z'}
+from scipy import stats
+
+z = np.abs(stats.norm.ppf((1-.99)/2))
+print(z)
+ci = (exp_mu - z * exp_se, exp_mu + z * exp_se)
+ci
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:31.473147Z', start_time: '2023-09-01T17:14:31.470047Z'}
+stats.norm.ppf((1-.99)/2)
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:31.553746Z', start_time: '2023-09-01T17:14:31.474596Z'}
+#| tags: [hide-input]
+x = np.linspace(exp_mu - 4*exp_se, exp_mu + 4*exp_se, 100)
+y = stats.norm.pdf(x, exp_mu, exp_se)
+
+plt.figure(figsize=(10,4))
+plt.plot(x, y, lw=3)
+plt.vlines(ci[1], ymin=0, ymax=4, ls="dotted")
+plt.vlines(ci[0], ymin=0, ymax=4, ls="dotted", label="99% CI")
+
+
+ci_95 = (exp_mu - 1.96 * exp_se, exp_mu + 1.96 * exp_se)
+
+plt.vlines(ci_95[1], ymin=0, ymax=4, ls="dashed")
+plt.vlines(ci_95[0], ymin=0, ymax=4, ls="dashed", label="95% CI")
+plt.xlabel("Conversion")
+plt.legend()
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:31.559265Z', start_time: '2023-09-01T17:14:31.555088Z'}
+def ci(y: pd.Series):
+    return (y.mean() - 2 * y.sem(), y.mean() + 2 * y.sem())
+
+print("95% CI for Short Email:", ci(short_email))
+print("95% CI for Long Email:", ci(long_email))
+print("95% CI for No Email:", ci(no_email))
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:31.653983Z', start_time: '2023-09-01T17:14:31.560700Z'}
+#| tags: [hide-input]
+plt.figure(figsize=(10,4))
+
+x = np.linspace(-0.05, .25, 100)
+short_dist = stats.norm.pdf(x, short_email.mean(), short_email.sem())
+plt.plot(x, short_dist, lw=2, label="Short", linestyle=linestyle[0])
+plt.fill_between(x.clip(ci(short_email)[0], ci(short_email)[1]), 0, short_dist, alpha=0.2, color="0.0")
+
+long_dist = stats.norm.pdf(x, long_email.mean(), long_email.sem())
+plt.plot(x, long_dist, lw=2, label="Long", linestyle=linestyle[1])
+plt.fill_between(x.clip(ci(long_email)[0], ci(long_email)[1]), 0, long_dist, alpha=0.2, color="0.4")
+
+no_email_dist = stats.norm.pdf(x, no_email.mean(), no_email.sem())
+plt.plot(x, no_email_dist, lw=2, label="No email", linestyle=linestyle[2])
+plt.fill_between(x.clip(ci(no_email)[0], ci(no_email)[1]), 0, no_email_dist, alpha=0.2, color="0.8")
+
+plt.xlabel("Conversion")
+plt.legend()
+```
+
+## Hypothesis Testing
+ 
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:32.135826Z', start_time: '2023-09-01T17:14:31.655540Z'}
+#| tags: [hide-output]
+import seaborn as sns
+from matplotlib import pyplot as plt
+
+np.random.seed(123)
+
+n1 = np.random.normal(4, 3, 30000)
+n2 = np.random.normal(1, 4, 30000)
+n_diff = n2 - n1
+
+plt.figure(figsize=(10,4))
+sns.distplot(n1, hist=False, label="$N(4,3^2)$", color="0.0", kde_kws={"linestyle":linestyle[0]})
+sns.distplot(n2, hist=False, label="$N(1,4^2)$", color="0.4", kde_kws={"linestyle":linestyle[1]})
+sns.distplot(n_diff, hist=False,
+             label=f"$N(-3, 5^2) = N(1,4^2) - (4,3^2)$", color="0.8", kde_kws={"linestyle":linestyle[1]})
+plt.legend();
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:32.141048Z', start_time: '2023-09-01T17:14:32.137649Z'}
+diff_mu = short_email.mean() - no_email.mean()
+diff_se = np.sqrt(no_email.sem()**2 + short_email.sem()**2)
+
+ci = (diff_mu - 1.96*diff_se, diff_mu + 1.96*diff_se)
+print(f"95% CI for the differece (short email - no email):\n{ci}")
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:32.214519Z', start_time: '2023-09-01T17:14:32.142862Z'}
+#| tags: [hide-input]
+x = np.linspace(diff_mu - 4*diff_se, diff_mu + 4*diff_se, 100)
+y = stats.norm.pdf(x, diff_mu, diff_se)
+
+plt.figure(figsize=(10,3))
+plt.plot(x, y, lw=3)
+plt.vlines(ci[1], ymin=0, ymax=4, ls="dotted")
+plt.vlines(ci[0], ymin=0, ymax=4, ls="dotted", label="95% CI")
+plt.xlabel("Diff. in Conversion (Short - No Email)\n")
+plt.legend()
+plt.subplots_adjust(bottom=0.15)
+
+```
+
+
+
+### Null Hypothesis
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:32.219374Z', start_time: '2023-09-01T17:14:32.215971Z'}
+# shifting the CI
+diff_mu_shifted =  short_email.mean() - no_email.mean() - 0.01 
+diff_se = np.sqrt(no_email.sem()**2 + short_email.sem()**2)
+
+ci = (diff_mu_shifted - 1.96*diff_se, diff_mu_shifted + 1.96*diff_se)
+print(f"95% CI 1% difference between (short email - no email):\n{ci}")
+```
+
+
+### Test Statistic
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:32.224419Z', start_time: '2023-09-01T17:14:32.220897Z'}
+t_stat = (diff_mu - 0) / diff_se
+t_stat
+```
+
+
+ 
+## P-values
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:32.319306Z', start_time: '2023-09-01T17:14:32.231500Z'}
+#| tags: [hide-input]
+x = np.linspace(-4, 4, 100)
+y = stats.norm.pdf(x, 0, 1)
+
+plt.figure(figsize=(10,4))
+plt.plot(x, y, lw=2)
+plt.vlines(t_stat, ymin=0, ymax=0.1, ls="dotted", label="T-Stat", lw=2)
+plt.fill_between(x.clip(t_stat), 0, y, alpha=0.4, label="P-value")
+plt.legend()
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:32.323269Z', start_time: '2023-09-01T17:14:32.320788Z'}
+print("P-value:", (1 - stats.norm.cdf(t_stat))*2)
+```
+
+## Power
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:32.327853Z', start_time: '2023-09-01T17:14:32.324718Z'}
+stats.norm.cdf(0.84)
+```
+
+## Sample Size Calculation
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:32.332472Z', start_time: '2023-09-01T17:14:32.329120Z'}
+# in the book it is np.ceil(16 * no_email.std()**2/0.01), but it is missing the **2 in the denominator.
+np.ceil(16 * (no_email.std()/0.08)**2)
+```
+
+```{python}
+#| ExecuteTime: {end_time: '2023-09-01T17:14:32.338471Z', start_time: '2023-09-01T17:14:32.334244Z'}
+data.groupby("cross_sell_email").size()
+```
+
+## Key Ideas
+
+
