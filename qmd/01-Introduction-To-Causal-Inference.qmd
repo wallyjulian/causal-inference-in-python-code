@@ -1,6 +1,5 @@
 ---
 title: 01 - Introduction To Causal Inference
-author: "L. Odette"
 jupyter: python3
 format: html
 page-layout: full
@@ -18,6 +17,7 @@ date: 06/26/2024
 
 ```{r}
 #| label: setup
+#| echo: false
 #| message: false
 #| warning: false
 

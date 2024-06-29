@@ -1,33 +1,74 @@
 ---
 title: 02 - Randomized Experiments and Stats Review
-jupyter: python3
+format: html
+page-layout: full
+editor: visual
+code-fold: true
+code-line-numbers: true
+code-block-border-left: "#31BAE9"
+theme: sandstone
+fontsize: 85%
+self-contained: true
+date: 06/26/2024
 ---
 
- 
- 
-## Brute Force Independence with Randomization
+<!--# using e.g. quarto convert causal-inference-in-python/03-Graphical-Models.ipynb -->
 
+```{r}
+#| label: r setup
+#| echo: false
+#| message: false
+#| warning: false
 
-## An A/B Testing Example
- 
+# see: https://towardsdatascience.com/using-double-machine-learning-and-linear-programming-to-optimise-treatment-strategies-920c20a29553
+# and: https://github.com/raz1470/causal_ai/blob/main/notebooks/estimating%20average%20treatment%20effects%20with%20double%20machine%20learning.ipynb?source=post_page-----920c20a29553--------------------------------
+
+# https://medium.com/save-the-data/how-to-use-python-in-r-with-reticulate-and-conda-36685534f06a
+# start with conda create --prefix ./envs python=3.11.8 numpy seaborn pandas
+# and conda activate /Users/louisodette/Documents/R_projects/causal-inference-in-python-code/envs 
+require(magrittr, quietly = TRUE)
+require(ggplot2, quietly = TRUE)
+require(reticulate, quietly = TRUE)
+require(patchwork, quietly = TRUE)
+
+# source(here::here("./R","DML_homebrew.R"))
+# source(here::here("R","fmt_doubleml_fit.R"))
+
+use_python('../envs/bin/', required = NULL)
+use_condaenv('../envs/', required = NULL)
+Sys.setenv(RETICULATE_PYTHON="../envs/bin/python")
+data_dir <- here::here("causal-inference-in-python/")
+```
 
 ```{python}
+#| label: python setup
+#| echo: false
 #| ExecuteTime: {end_time: '2023-09-01T17:14:29.347488Z', start_time: '2023-09-01T17:14:28.695287Z'}
 #| tags: [hide-input]
 import pandas as pd
 pd.set_option('display.max_rows', 5)
 ```
 
+## Brute Force Independence with Randomization
+
+## An A/B Testing Example
+
+::: panel-tabset
+## Python
+
 ```{python}
+#| label: py read data
 #| ExecuteTime: {end_time: '2023-09-01T17:14:29.363096Z', start_time: '2023-09-01T17:14:29.349423Z'}
 import pandas as pd # for data manipulation
 import numpy as np # for numerical computation
 
-data = pd.read_csv("./data/cross_sell_email.csv")
+#data = pd.read_csv("./data/cross_sell_email.csv")
+data = pd.read_csv(r.data_dir + "data/cross_sell_email.csv")
 data
 ```
 
 ```{python}
+#| label: py calc means
 #| ExecuteTime: {end_time: '2023-09-01T17:14:29.371157Z', start_time: '2023-09-01T17:14:29.364511Z'}
 (data
  .groupby(["cross_sell_email"])
@@ -35,6 +76,7 @@ data
 ```
 
 ```{python}
+#| label: py calc z-score
 #| ExecuteTime: {end_time: '2023-09-01T17:14:29.383056Z', start_time: '2023-09-01T17:14:29.373475Z'}
 #| scrolled: true
 X = ["gender", "age"]
@@ -48,10 +90,52 @@ norm_diff = ((mu - mu.loc["no_email"])/
 norm_diff
 ```
 
-## The Ideal Experiment
- 
+## R
 
- 
+```{r}
+#| label: r read data
+data <- 
+  readr::read_csv( 
+    here::here(data_dir, "data/cross_sell_email.csv")
+    , show_col_types = FALSE
+  )
+data |> dplyr::slice_head(n=5) |> gt::gt() |> gtExtras::gt_theme_espn()
+```
+
+```{r}
+#| label: r calc means
+data |> 
+  dplyr::group_by(cross_sell_email) |> 
+  dplyr::summarize(across(everything(), mean)) |> 
+  gt::gt() |> 
+  gt::fmt_number(everything(), decimals = 6) |> 
+  gtExtras::gt_theme_espn()
+
+```
+
+```{r}
+#| label: r calc z-score
+data |> 
+  dplyr::select(-conversion) |> 
+  dplyr::group_by(cross_sell_email) |> 
+  dplyr::summarize(across(everything(), list(mean=mean, var=var)) ) |> 
+  dplyr::mutate(
+    gender_mean = (gender_mean - gender_mean[2])/( sqrt((gender_var + gender_var[2])/2 ) )
+    , age_mean = (age_mean - age_mean[2])/( sqrt((age_var + age_var[2])/2 ) )
+  ) |> 
+  dplyr::select(-dplyr::ends_with("var")) |> 
+  gt::gt() |> 
+  gt::fmt_number(everything(), decimals = 6) |> 
+  gtExtras::gt_theme_espn()
+
+```
+
+:::
+
+
+
+## The Ideal Experiment
+
 ## The Most Dangerous Equation
 
 ```{python}
@@ -82,7 +166,7 @@ matplotlib.rcParams.update({'font.size': 18})
 
 ```{python}
 #| ExecuteTime: {end_time: '2023-09-01T17:14:30.706628Z', start_time: '2023-09-01T17:14:30.687207Z'}
-df = pd.read_csv("data/enem_scores.csv")
+df = pd.read_csv(r.data_dir + "data/enem_scores.csv")
 df.sort_values(by="avg_score", ascending=False).head(10)
 ```
 
@@ -118,12 +202,11 @@ plt.title("ENEM Score by Number of Students in the School")
 
 ```
 
-##  The Standard Error of Our Estimates
- 
+## The Standard Error of Our Estimates
 
 ```{python}
 #| ExecuteTime: {end_time: '2023-09-01T17:14:30.987374Z', start_time: '2023-09-01T17:14:30.976905Z'}
-data = pd.read_csv("./data/cross_sell_email.csv")
+data = pd.read_csv(r.data_dir + "data/cross_sell_email.csv")
 
 short_email = data.query("cross_sell_email=='short'")["conversion"]
 long_email = data.query("cross_sell_email=='long'")["conversion"]
@@ -149,7 +232,6 @@ print("SE for Short Email:", short_email.sem())
 ```
 
 ## Confidence Intervals
- 
 
 ```{python}
 #| ExecuteTime: {end_time: '2023-09-01T17:14:31.094364Z', start_time: '2023-09-01T17:14:30.999382Z'}
@@ -286,7 +368,6 @@ plt.legend()
 ```
 
 ## Hypothesis Testing
- 
 
 ```{python}
 #| ExecuteTime: {end_time: '2023-09-01T17:14:32.135826Z', start_time: '2023-09-01T17:14:31.655540Z'}
@@ -333,8 +414,6 @@ plt.subplots_adjust(bottom=0.15)
 
 ```
 
-
-
 ### Null Hypothesis
 
 ```{python}
@@ -347,7 +426,6 @@ ci = (diff_mu_shifted - 1.96*diff_se, diff_mu_shifted + 1.96*diff_se)
 print(f"95% CI 1% difference between (short email - no email):\n{ci}")
 ```
 
-
 ### Test Statistic
 
 ```{python}
@@ -356,8 +434,6 @@ t_stat = (diff_mu - 0) / diff_se
 t_stat
 ```
 
-
- 
 ## P-values
 
 ```{python}
@@ -399,5 +475,3 @@ data.groupby("cross_sell_email").size()
 ```
 
 ## Key Ideas
-
-
